@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import streamlit as st
 import plotly.express as px
+from datetime import datetime, date
 
 st.set_page_config(page_title="Beginner EDA • E‑commerce", page_icon="📊", layout="wide")
 
@@ -35,11 +36,25 @@ for c in df.columns:
     if "date" in c.lower():
         date_col_guess = c
         break
-date_col = st.sidebar.selectbox("Date column (optional)", [None] + df.columns.tolist(), index=(df.columns.get_loc(date_col_guess)+1) if date_col_guess in df.columns else 0)
-if date_col is not None:
-    df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
+date_col = st.sidebar.selectbox(
+    "Date column (optional)",
+    [None] + df.columns.tolist(),
+    index=(df.columns.get_loc(date_col_guess)+1) if (date_col_guess in df.columns if date_col_guess else False) else 0
+)
 
-# Numeric hints
+if date_col is not None:
+    # Parse to datetime, drop tz if any
+    df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
+    if pd.api.types.is_datetime64_any_dtype(df[date_col]):
+        try:
+            df[date_col] = df[date_col].dt.tz_localize(None)
+        except Exception:
+            try:
+                df[date_col] = df[date_col].dt.tz_convert(None)
+            except Exception:
+                pass
+
+# Numeric / categorical column detection
 num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
 cat_cols = df.select_dtypes(exclude=[np.number]).columns.tolist()
 
@@ -79,7 +94,7 @@ price_col = st.selectbox("Price column", [None] + df.columns.tolist(), index=(df
 disc_col = st.selectbox("Discount column (0–1 or 0–100)", [None] + df.columns.tolist(), index=(df.columns.get_loc("discount")+1) if "discount" in df.columns else 0)
 
 if qty_col and price_col:
-    gross = df[qty_col].astype(float) * df[price_col].astype(float)
+    gross = pd.to_numeric(df[qty_col], errors="coerce") * pd.to_numeric(df[price_col], errors="coerce")
     if disc_col:
         disc = pd.to_numeric(df[disc_col], errors="coerce")
         disc = np.where(disc > 1, disc/100.0, disc)
@@ -91,18 +106,30 @@ if qty_col and price_col:
 # 5) Filters (beginner-friendly)
 st.subheader("🔎 Basic Filters")
 if date_col is not None and df[date_col].notna().any():
-    mind, maxd = df[date_col].min(), df[date_col].max()
-    start, end = st.slider("Date range", min_value=mind, max_value=maxd, value=(mind, maxd))
-    date_mask = df[date_col].between(start, end)
+    ser = df[date_col].dropna()
+    mind = ser.min()
+    maxd = ser.max()
+    # Convert to Python date for robust widget behavior
+    mind_date = mind.date() if hasattr(mind, "date") else pd.to_datetime(mind).date()
+    maxd_date = maxd.date() if hasattr(maxd, "date") else pd.to_datetime(maxd).date()
+    start_date, end_date = st.date_input("Date range", value=(mind_date, maxd_date), min_value=mind_date, max_value=maxd_date)
+    # Ensure tuple (Streamlit can return a single date if user picks one)
+    if isinstance(start_date, date) and isinstance(end_date, date):
+        date_mask = df[date_col].dt.date.between(start_date, end_date)
+    else:
+        # Single date selected
+        only_date = start_date if isinstance(start_date, date) else mind_date
+        date_mask = df[date_col].dt.date == only_date
 else:
     date_mask = pd.Series(True, index=df.index)
 
 # Category-like filter (pick a column to filter by values)
 filter_col = st.selectbox("Pick a column to filter values", [None] + df.columns.tolist())
 if filter_col:
-    vals = sorted(df.loc[date_mask, filter_col].dropna().unique().tolist())
-    sel_vals = st.multiselect("Select values", vals, default=vals[: min(5, len(vals))])
-    value_mask = df[filter_col].isin(sel_vals) if len(sel_vals) else pd.Series(True, index=df.index)
+    vals = sorted(df.loc[date_mask, filter_col].dropna().astype(str).unique().tolist())
+    default_vals = vals[: min(5, len(vals))]
+    sel_vals = st.multiselect("Select values", vals, default=default_vals)
+    value_mask = df[filter_col].astype(str).isin(sel_vals) if len(sel_vals) else pd.Series(True, index=df.index)
 else:
     value_mask = pd.Series(True, index=df.index)
 
@@ -118,7 +145,7 @@ if len(num_cols):
 
 if len(cat_cols):
     cat_for_plot = st.selectbox("Categorical column for bar chart", cat_cols, index=0)
-    bar = fdf[cat_for_plot].value_counts().reset_index()
+    bar = fdf[cat_for_plot].astype(str).value_counts().reset_index()
     bar.columns = [cat_for_plot, "count"]
     fig = px.bar(bar, x=cat_for_plot, y="count", title=f"Counts of {cat_for_plot}")
     st.plotly_chart(fig, use_container_width=True)
