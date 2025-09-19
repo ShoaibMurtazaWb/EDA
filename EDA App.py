@@ -35,7 +35,7 @@ df.info(buf=buffer)
 st.text(buffer.getvalue())
 
 st.header("2) Summary Statistics (include='all')")
-st.dataframe(df.describe(include='all').transpose(), use_container_width=True)
+st.dataframe(df.describe(include='all').transpose())
 
 st.header("3) Data Quality Checks")
 c1, c2 = st.columns(2)
