@@ -5,9 +5,9 @@ import numpy as np
 import streamlit as st
 import plotly.express as px
 
-st.set_page_config(page_title="🛒 Ecommerce — Assignment 2 Style (Streamlit)", page_icon="🛒", layout="wide")
+st.set_page_config(page_title="🛒 Ecommerce Analysis (Streamlit)", page_icon="🛒", layout="wide")
 
-st.title("🛒 Ecommerce Dataset — Assignment 2 Style Analysis (Streamlit)")
+st.title("🛒 Ecommerce Dataset —  Style Analysis (Streamlit)")
 
 # -----------------------------
 # Load data
