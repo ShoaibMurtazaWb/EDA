@@ -186,4 +186,3 @@ else:
 # -----------------------------
 st.header("10) Data Preview & Export")
 st.dataframe(df.head(200), use_container_width=True)
-st.download_button("⬇️ Download CSV", data=df.to_csv(index=False).encode("utf-8"), file_name="ecommerce_analysis_output.csv")
