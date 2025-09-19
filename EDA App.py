@@ -1,4 +1,3 @@
-
 import os
 import io
 import pandas as pd
@@ -10,6 +9,9 @@ st.set_page_config(page_title="🛒 Ecommerce — Assignment 2 Style (Streamlit)
 
 st.title("🛒 Ecommerce Dataset — Assignment 2 Style Analysis (Streamlit)")
 
+# -----------------------------
+# Load data
+# -----------------------------
 st.sidebar.header("Load Data")
 uploaded = st.sidebar.file_uploader("Upload CSV (optional)", type=["csv"])
 default_path = "/mnt/data/ecommerce_dataset.csv"
@@ -24,19 +26,40 @@ else:
     st.error("No dataset found. Please upload a CSV.")
     st.stop()
 
+# Parse date column
 if "order_date" in df.columns:
     df["order_date"] = pd.to_datetime(df["order_date"], errors="coerce")
 
 st.caption(f"Data source: **{source}** • Shape: **{df.shape}**")
 
-st.header("1) Dataset Info")
+# -----------------------------
+# 1) Data Overview (FULL WIDTH)
+# -----------------------------
+st.header("1) Data Overview")
+
+# 100% width: Preview
+st.subheader("Preview")
+st.dataframe(df.head(), use_container_width=True)
+
+# 100% width: Dtypes
+st.subheader("Dtypes")
+st.dataframe(pd.DataFrame(df.dtypes.astype(str), columns=["dtype"]), use_container_width=True)
+
+# 100% width: Summary
+st.subheader("Summary")
+st.dataframe(df.describe(include='all').transpose(), use_container_width=True)
+
+# -----------------------------
+# 2) Dataset Info (text, like df.info())
+# -----------------------------
+st.header("2) Dataset Info")
 buffer = io.StringIO()
 df.info(buf=buffer)
 st.text(buffer.getvalue())
 
-st.header("2) Summary Statistics (include='all')")
-st.dataframe(df.describe(include='all').transpose(), use_container_width=True)
-
+# -----------------------------
+# 3) Data Quality Checks
+# -----------------------------
 st.header("3) Data Quality Checks")
 c1, c2 = st.columns(2)
 with c1:
@@ -49,14 +72,19 @@ with c2:
     st.subheader("Duplicates")
     st.metric("Duplicate rows", f"{dup_count:,}")
 
+# -----------------------------
+# Identify columns
+# -----------------------------
 st.markdown("### Note: Excluding identifier columns from numeric analysis (`order_id`, `customer_id`, `product_id`).")
 id_cols = [c for c in ["order_id","customer_id","product_id"] if c in df.columns]
 num_cols = [c for c in df.select_dtypes(include=[np.number]).columns if c not in id_cols]
 cat_cols = [c for c in df.select_dtypes(exclude=[np.number]).columns if c not in id_cols and c != "order_date"]
-
 st.caption(f"Numeric columns used: {num_cols}")
 st.caption(f"Categorical columns used: {cat_cols}")
 
+# -----------------------------
+# 4) Univariate — Numeric (per column)
+# -----------------------------
 st.header("4) Univariate — Numeric Columns")
 if len(num_cols):
     for col in num_cols:
@@ -66,6 +94,9 @@ if len(num_cols):
 else:
     st.info("No numeric columns to plot (after excluding ID columns).")
 
+# -----------------------------
+# 5) Univariate — Categorical (per column)
+# -----------------------------
 st.header("5) Univariate — Categorical Columns")
 if len(cat_cols):
     for col in cat_cols:
@@ -78,6 +109,9 @@ if len(cat_cols):
 else:
     st.info("No categorical columns to plot.")
 
+# -----------------------------
+# 6) Bivariate — Price vs Discount (colored by Category)
+# -----------------------------
 st.header("6) Bivariate — Price vs Discount by Category")
 if set(["price","discount"]).issubset(df.columns):
     color_col = "category" if "category" in df.columns else None
@@ -87,15 +121,21 @@ if set(["price","discount"]).issubset(df.columns):
 else:
     st.caption("Requires `price` and `discount` columns.")
 
+# -----------------------------
+# 7) Compute net_revenue
+# -----------------------------
 if set(["quantity","price"]).issubset(df.columns):
     discount = df["discount"] if "discount" in df.columns else 0.0
     discount = pd.to_numeric(discount, errors="coerce").fillna(0.0)
-    discount = np.where(discount > 1, discount/100.0, discount)
+    discount = np.where(discount > 1, discount/100.0, discount)  # 0–1 or 0–100
     df["net_revenue"] = pd.to_numeric(df["quantity"], errors="coerce") * pd.to_numeric(df["price"], errors="coerce") * (1 - discount)
     st.success("Computed `net_revenue = quantity * price * (1 - discount)`")
 else:
     st.warning("`quantity` and `price` required to compute `net_revenue`.")
 
+# -----------------------------
+# 8) Revenue by groups
+# -----------------------------
 st.header("7) Revenue by Groups")
 if "net_revenue" in df.columns:
     if "category" in df.columns:
@@ -114,6 +154,9 @@ if "net_revenue" in df.columns:
 else:
     st.caption("Revenue charts need `net_revenue`.")
 
+# -----------------------------
+# 9) Time Series — Daily Net Revenue
+# -----------------------------
 st.header("8) Time Series — Daily Net Revenue")
 if "order_date" in df.columns and "net_revenue" in df.columns:
     daily = df.groupby(df["order_date"].dt.date)["net_revenue"].sum().reset_index()
@@ -123,6 +166,9 @@ if "order_date" in df.columns and "net_revenue" in df.columns:
 else:
     st.caption("Requires `order_date` and computed `net_revenue`.")
 
+# -----------------------------
+# 10) Correlation Heatmap
+# -----------------------------
 st.header("9) Correlation Heatmap")
 if len(num_cols):
     use_cols = list(dict.fromkeys(num_cols + (["net_revenue"] if "net_revenue" in df.columns else [])))
@@ -135,6 +181,9 @@ if len(num_cols):
 else:
     st.caption("No numeric columns for correlation.")
 
+# -----------------------------
+# 11) Data Preview & Export
+# -----------------------------
 st.header("10) Data Preview & Export")
 st.dataframe(df.head(200), use_container_width=True)
 st.download_button("⬇️ Download CSV", data=df.to_csv(index=False).encode("utf-8"), file_name="ecommerce_analysis_output.csv")
